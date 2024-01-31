@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+        <!--CSS Styles -->
+        <link rel="stylesheet" href="assets/css/styles.css" />
+    
+        <!-- Favicons -->
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="assets/icons/apple-touch-icon.png"
+        />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="assets/icons/favicon-32x32.png"
+        />
+    
+        <!-- Animate CSS CDN -->
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
+        />
+        <title>Alice Mwanri | Software Developer</title>
+      </head>
+    
+    <style>
+    #myContainer {
+    width: 400px;
+    height: 400px;
+    position: relative;
+    background: black;
+    }
+
+    .container img {
+        width: 50%;
+        height: 50%;
+        position: absolute;
+    } 
+    canvas {
+        border : 1px solid black;
+    }
+
+    </style>
+    <body>
+        <!-- Navbar -->
+        <nav>
+            <h1><a href="file:///C:/Users/anasi/Documents/Portfolio/Portfolio/landing.html" class="nav-link">Alice Mwanri</a></h1>
+            <ul class="navigation">
+            <li><a href="#about" class="nav-link">About</a></li>
+            <li><a href="file:///C:/Users/anasi/Documents/Portfolio/Portfolio/liquidLights.html" class="nav-link">Liquid Lights</a></li>
+            <li><a href="file:///C:/Users/anasi/Documents/Portfolio/Portfolio/projects.html" class="nav-link">Ball</a></li>
+            <li><a href="#contact" class="nav-link">Contact</a></li>
+            </ul>
+            <button class="burger-menu" id="burger-menu">
+            <ion-icon class="bars" name="menu-outline"></ion-icon>
+            </button>
+        </nav>
+
+        <canvas id="canvas" width = "400" height = "400"></canvas>
+    
+    <script>
+        const N = 40;
+        var iter = 4;
+        const scale = 10;
+
+        function IX(x, y){
+            return x+y*N;
+        }
+
+        class Fluid{
+            size;
+
+            dt;
+            diff;
+            visc;
+
+            s;
+            density;
+
+            Vx;
+            Vy;
+
+            Vx0;
+            Vy0;
+
+            constructor(dt, diffusion, viscosity){
+                this.size = N;
+                this.dt = dt;
+                this.diff = diffusion;
+                this.visc = viscosity;
+
+                this.s = new Float32Array(N*N);
+                this.density = new Float32Array(N*N);
+
+                this.Vx = new Float32Array(N*N);
+                this.Vy = new Float32Array(N*N);
+
+                this.Vx0 = new Float32Array(N*N);
+                this.Vy0 = new Float32Array(N*N);
+            }
+
+            step(){
+                var N = this.size;
+                visc = this.visc;
+                diff = this.diff;
+                dt = this.dt;
+                Vx = this.Vx;
+                Vy = this.Vy;
+                Vx0 = this.Vx0;
+                Vy0 = this.Vy0;
+                s = this.s;
+                density = this.density;
+
+                diffuse(1, Vx0, Vx, visc, dt);
+                diffuse(2, Vy0, Vy, visc, dt);
+
+                project(Vx0, Vy0, Vx, Vy);
+
+                advect(1, Vx, Vx0, Vx0, Vy0, dt);
+                advect(2, Vy, Vy0, Vx0, Vy0, dt);
+
+                project(Vx, Vy, Vx0, Vy0);
+
+                diffuse(0, s, density, diff, dt);
+                advect(0, density, s, Vx, Vy, dt);
+
+            }
+
+            addDensity(x, y, amount){
+                index = IX(x, y);
+                this.density[index] += amount;
+            }
+
+            addVelocity(x, y, amountX, amountY){
+                index = IX(x, y);
+                this.Vx[index] += amountX;
+                this.Vy[index] += amountY;
+            }
+
+            diffuse(b, x, x0, diff, dt){
+                a = dt * diff * (N-2) * (N-2);
+                lin_solve(b, x, x0, a, 1 + 6 * a, iter, N);
+            }
+
+            lin_solve(b, x, x0, a, c){
+                cRecip = 1.0/c;
+                for(k = 0; k < iter; k++){
+                    for(j = 1; j < N - 1; j++){
+                        for(i = 1; i < N - 1; i++){
+                            x[IX(i,j)] = 
+                                (x0[IX(i, j)]
+                                    + a*(x[IX(i+1, j)]
+                                    +x[IX(i-1, j)]
+                                    +x[IX(i, j+1)]
+                                    +x[IX(i, j-1)]
+                                    )) * cRecip;
+                        }
+                    }
+                }
+            }
+
+            set_bnd(b, x){
+                for(i = 1; i < N - 1; i++){
+                    x[IX(i,0)] = b == 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
+                    x[IX(i, N - 1)] = b == 2 ? -x[IX(i, N-2)] : x[IX(i, N-2)];
+                }
+
+                for(j = 1; j < N - 1; j++){
+                    x[IX(0,j)] = b == 1 ? -x[IX(i, j)] : x[IX(1, j)];
+                    x[IX(N-1, j)] = b == 1 ? -x[IX(N-2, j)] : x[IX(N-2, j)];
+                }
+
+                x[IX(0, 0)] = 0.5 * (x[IX(1, 0)] + x[IX(0, 1)]);
+                x[IX(0, N-1)] = 0.5 * (x[IX(1, N-1)] + x[IX(0, N-2)]);
+                x[IX(N-1, 0)] = 0.5 * (x[IX(N-2, 0)] + x[IX(N-1, 1)]);
+                x[IX(N-1, N-1)] = 0.5 * (x[IX(N-2, N-1)] + x[IX(N-1, N-2)]);
+            }
+
+            project(velocX, velocy, p, div){
+                for(j = 1; j < N - 1; j++){
+                    for(i = 1; i < N - 1; i++){
+                        div[IX(i, j)] = -0.5*(
+                            velocX[IX(i+1, j)]
+                            -velocX[IX(i-1, j)]
+                            +velocY[IX(i, j+1)]
+                            -velocY[IX(i, j-1)]
+                            )/N;
+                        p[IX(i,j)] = 0;
+                        
+                    }
+                }
+
+                set_bnd(0, div);
+                set_bnd(0, p);
+                lin_solve(0, p, div, 1, 6);
+
+                for(j = 1; j < N - 1; j++){
+                    for(i = 1; i < N - 1; i++){
+                        velocX[IX(i, j)] -= 0.5 * (p[IX(i+1, j)]
+                                                    -p[IX(i-1, j)]) * N;
+                        velocy[IX(i, j)] -= 0.5 * (p[IX(i, j+1)]
+                                                    -p[IX(i, j-1)]) * N;        
+                    }
+                }
+
+                set_bnd(1, velocX);
+                set_bnd(2, velocY);
+
+            }
+
+            advect(b, d, d0, velocX, velocY, dt){
+                i0, i1, j0, j1;
+
+                dtx = dt * (N-2);
+                dty = dt * (N-2);
+
+                s0, s1, t0, t1;
+                tmp1, tmp2, x, y;
+
+                Nfloat = N;
+                ifloat, jfloat;
+                i, j, k;
+
+                for(j = 1, jfloat = 1; j < N - 1; j++, jfloat++){
+                    for(i = 1, ifloat = 1; i < N - 1; i++, ifloat++){
+                        tmp1 = dtx * velocX[IX(i, j)];
+                        tmp2 = dty * velocY[IX(i, j)];
+                        x = ifloat - tmp1;
+                        y = jfloat - tmp2;
+                        
+                        if(x < 0.5) {x = 0.5;}
+                        if(x > Nfloat + 0.5) {x = Nfloat + 0.5;}
+                        i0 = Math.floor(x);
+                        i1 = i0 + 1.0;
+                        if(y < 0.5){y = 0.5;}
+                        if(y > Nfloat + 0.5){y = Nfloat + 0.5;}
+                        j0 = Math.floor(y);
+                        j1 = j0 + 1.0;
+
+                        s1 = x - i0;
+                        s0 = 1.0 - s1;
+                        t1 = y - j0;
+                        t0 = 1.0 - t1;
+
+                        i0i = Math.round(i0);
+                        i1i = Math.round(i1);
+                        j0i = Math.round(j0);
+                        j1i = Math.round(j1);
+
+                        d[IX(i, j)] = s0 * (t0 * d0[IX(i0i, j0i)] + t1 * d0[IX(i0i, j1i)]) +
+                                        s1 * (t0 * d0[IX(i1i, j0i)] + t1 * d0[IX(i1i, j1i)]);
+
+                    }
+                }
+
+                set_bnd(b, d);
+            }
+
+            renderD(){
+                const canvas = document.getElementById("canvas");
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = "green";
+
+                for(i = 0; i < N; i++){
+                    for(j = 0; j < N; j++){
+                        x = i*scale;
+                        y = j*scale;
+                        ctx.fillRect(x, y, x+1, y+1);
+                    }
+                }
+            }
+
+            
+
+        }
+
+        fluid;
+
+        function settings(){
+            //size(N, N);
+        }
+
+        function setup(){
+            fluid = new Fluid(0.1, 0, 0);
+        }
+
+        function mouseDragged(event){
+            fluid.addDensity(event.offsetX, event.offsetY, 100);
+        }
+
+        function draw(){
+            fluid.step();
+            fluid.renderD();
+        }
+
+        document.addEventListener("drag", mouseDragged);
+        draw();
+
+    </script>
+
+    </body>
+</html>
